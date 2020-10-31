@@ -1,0 +1,58 @@
+service: lambda-wkhtmltopdf-example
+
+package:
+  individually: true
+
+plugins:
+  - serverless-webpack
+  - serverless-offline
+
+custom:
+  s3_bucket: ${self:provider.stage}-pdf-files
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: ${opt:stage, "dev"}
+  region: eu-central-1
+  environment:
+    S3_PDF_FILES_BUCKET:
+      Ref: S3PdfFiles
+    S3_PDF_FILES_URL:
+      Fn::GetAtt: [S3PdfFiles, RegionalDomainName]
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "s3:*"
+      Resource:
+        "Fn::Join":
+          - ""
+          - - "arn:aws:s3:::"
+            - Ref: S3PdfFiles
+            - "/*"
+
+layers:
+  wkhtmltoxLayer:
+    name: ${self:provider.stage}-wkhtmltox
+    description: wkhtmltox binary for pdf/image generation
+    package:
+      artifact: layers/wkhtmltox.zip
+
+functions:
+  GeneratePdfFromUrl:
+    handler: src/generate.handler
+    events:
+      - http:
+          path: generate
+          method: get
+    layers:
+      - { Ref: WkhtmltoxLayerLambdaLayer }
+    environment:
+      FONTCONFIG_PATH: /opt/fonts
+
+resources:
+  Resources:
+    S3PdfFiles:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.s3_bucket}
